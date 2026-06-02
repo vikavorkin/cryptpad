@@ -51,12 +51,16 @@ const factory = (nThen, Util, ApiConfig = {}, Nacl) => {
         });
     };
 
-    var serverCommand = function (keypair, my_data, cb) {
+    // stage2Fn is an optional async hook called between Stage 1 and Stage 2.
+    // Signature: stage2Fn(stage1Response, next) where next(err, extraParams) continues to Stage 2.
+    // extraParams (if provided) are merged into the Stage 2 POST body alongside {sig, txid}.
+    // Commands must declare acceptance of these params via command.stage2Extensions on the server.
+    var serverCommand = function (keypair, my_data, cb, stage2Fn) {
         var obj = clone(my_data);
         obj.publicKey = Util.encodeBase64(keypair.publicKey);
         obj.nonce = randomToken();
         var href = new URL('/api/auth/', API_ORIGIN);
-        var txid, date;
+        var txid, date, stage1Response;
         nThen(function (w) {
             // Tell the server we want to do some action
             postData(href, obj, w((err, data) => {
@@ -77,7 +81,21 @@ const factory = (nThen, Util, ApiConfig = {}, Nacl) => {
                 }
                 txid = data.txid;
                 date = data.date;
+                stage1Response = data;
             }));
+        }).nThen(function (w) {
+            if (typeof stage2Fn !== 'function') { return; }
+            // Allow callers to perform async work (e.g. WebAuthn credential interaction)
+            // between Stage 1 and Stage 2. The callback receives extra params to add to Stage 2.
+            var done = w();
+            stage2Fn(stage1Response, function (err, extraParams) {
+                if (err) {
+                    w.abort();
+                    return void cb(err);
+                }
+                stage1Response._stage2Extras = extraParams || {};
+                done();
+            });
         }).nThen(function (w) {
             var copy = clone(obj);
             copy.txid = txid;
@@ -85,10 +103,10 @@ const factory = (nThen, Util, ApiConfig = {}, Nacl) => {
             var toSign = Util.decodeUTF8(JSON.stringify(copy));
             var sig = Nacl.sign.detached(toSign, keypair.secretKey);
             var encoded = Util.encodeBase64(sig);
-            var obj2 = {
+            var obj2 = Object.assign({
                 sig: encoded,
                 txid: txid,
-            };
+            }, (stage1Response && stage1Response._stage2Extras) || {});
             postData(href, obj2, w((err, data) => {
                 if (err) {
                     w.abort();

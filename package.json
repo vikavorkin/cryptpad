@@ -14,6 +14,8 @@
   "dependencies": {
     "@mcrowe/minibloom": "^0.2.0",
     "@node-saml/node-saml": "^5.1.0",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.1",
     "alertify.js": "1.0.11",
     "body-parser": "^1.20.4",
     "bootstrap": "^4.0.0",

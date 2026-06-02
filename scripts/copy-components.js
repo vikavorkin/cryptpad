@@ -57,3 +57,14 @@ Fse.rmSync(oldComponentsPath, { recursive: true, force: true });
     Fs.rmSync(destination, { recursive: true, force: true });
     Fs.cpSync(source, destination, { recursive: true });
 });
+
+// Scoped packages must be handled separately to avoid '@' in the www path.
+// The UMD bundle is placed at /components/simplewebauthn-browser/.
+[
+    { src: "@simplewebauthn/browser", dest: "simplewebauthn-browser" },
+].forEach(({ src, dest }) => {
+    const source = Path.join("node_modules", src);
+    const destination = Path.join(componentsPath, dest);
+    Fs.rmSync(destination, { recursive: true, force: true });
+    Fs.cpSync(source, destination, { recursive: true });
+});

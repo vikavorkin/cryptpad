@@ -270,6 +270,100 @@ define([
                             });
                         });
                     });
+
+                    // WebAuthn setup: Stage 1 returns registrationOptions; between stages the
+                    // user touches their key via navigator.credentials.create(); Stage 2 sends
+                    // the attestationResponse alongside the NaCl signature.
+                    sframeChan.on('Q_SETTINGS_WEBAUTHN_SETUP', function (obj, cb) {
+                        require([
+                            '/common/outer/http-command.js',
+                            '/components/simplewebauthn-browser/dist/bundle/index.umd.min.js',
+                        ], function (ServerCommand) {
+                            var SimpleWebAuthn = window.SimpleWebAuthnBrowser;
+                            ServerCommand(obj.key, {
+                                command: 'WEBAUTHN_SETUP',
+                                session: Utils.LocalStore.getSessionToken(),
+                            }, function (err, response) {
+                                cb({ success: Boolean(!err && response && response.bearer) });
+                                if (response && response.bearer) {
+                                    Utils.LocalStore.setSessionToken(response.bearer);
+                                }
+                            }, function (stage1Response, next) {
+                                if (!stage1Response || !stage1Response.registrationOptions) {
+                                    return void next('WEBAUTHN_NO_OPTIONS');
+                                }
+                                SimpleWebAuthn.startRegistration({
+                                    optionsJSON: stage1Response.registrationOptions,
+                                }).then(function (attestationResponse) {
+                                    next(null, { attestationResponse: attestationResponse });
+                                }).catch(function (err) {
+                                    console.error(err);
+                                    next('WEBAUTHN_CANCELLED');
+                                });
+                            });
+                        });
+                    });
+
+                    // WebAuthn revoke: Stage 1 returns authenticationOptions; between stages the
+                    // user proves key possession; Stage 2 sends assertionResponse.
+                    sframeChan.on('Q_SETTINGS_WEBAUTHN_REVOKE', function (obj, cb) {
+                        require([
+                            '/common/outer/http-command.js',
+                            '/components/simplewebauthn-browser/dist/bundle/index.umd.min.js',
+                        ], function (ServerCommand) {
+                            var SimpleWebAuthn = window.SimpleWebAuthnBrowser;
+                            ServerCommand(obj.key, {
+                                command: 'WEBAUTHN_REVOKE',
+                                credentialId: obj.data && obj.data.credentialId,
+                            }, function (err, response) {
+                                cb({ success: Boolean(!err && response && response.success) });
+                                if (response && response.success) {
+                                    Utils.LocalStore.setSessionToken('');
+                                }
+                            }, function (stage1Response, next) {
+                                if (!stage1Response || !stage1Response.authenticationOptions) {
+                                    return void next('WEBAUTHN_NO_OPTIONS');
+                                }
+                                SimpleWebAuthn.startAuthentication({
+                                    optionsJSON: stage1Response.authenticationOptions,
+                                }).then(function (assertionResponse) {
+                                    next(null, { assertionResponse: assertionResponse });
+                                }).catch(function (err) {
+                                    console.error(err);
+                                    next('WEBAUTHN_CANCELLED');
+                                });
+                            });
+                        });
+                    });
+
+                    // WebAuthn validate: used during login when block is protected by WebAuthn MFA.
+                    // Called by the login flow when the block's 401 response has method === 'WebAuthn'.
+                    sframeChan.on('Q_SETTINGS_WEBAUTHN_VALIDATE', function (obj, cb) {
+                        require([
+                            '/common/outer/http-command.js',
+                            '/components/simplewebauthn-browser/dist/bundle/index.umd.min.js',
+                        ], function (ServerCommand) {
+                            var SimpleWebAuthn = window.SimpleWebAuthnBrowser;
+                            ServerCommand(obj.key, {
+                                command: 'WEBAUTHN_VALIDATE',
+                                session: obj.session || '',
+                            }, function (err, response) {
+                                cb(err, response);
+                            }, function (stage1Response, next) {
+                                if (!stage1Response || !stage1Response.authenticationOptions) {
+                                    return void next('WEBAUTHN_NO_OPTIONS');
+                                }
+                                SimpleWebAuthn.startAuthentication({
+                                    optionsJSON: stage1Response.authenticationOptions,
+                                }).then(function (assertionResponse) {
+                                    next(null, { assertionResponse: assertionResponse });
+                                }).catch(function (err) {
+                                    console.error(err);
+                                    next('WEBAUTHN_CANCELLED');
+                                });
+                            });
+                        });
+                    });
                     sframeChan.on('Q_SETTINGS_GET_SSO_SEED', function (obj, _cb) {
                         var cb = Utils.Util.mkAsync(_cb);
                         cb({

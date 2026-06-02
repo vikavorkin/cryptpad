@@ -130,6 +130,24 @@ module.exports = {
      */
     //otpSessionExpiration: 7*24, // hours
 
+    /*  WebAuthn (security key / passkey) support.
+     *
+     *  rpId must be the effective domain of the CryptPad instance (no port, no scheme).
+     *  rpName is a human-readable name shown by the browser during registration.
+     *  origin must match the exact origin (scheme + host + port) from which users access CryptPad.
+     *
+     *  These values default to values derived from httpUnsafeOrigin, so you only need to
+     *  set them if your setup is non-standard (e.g. reverse proxy that changes the origin).
+     *
+     *  maxKeys limits how many security keys a single account may register (default: 5).
+     */
+    //webauthn: {
+    //    rpId: 'cryptpad.example.com',
+    //    rpName: 'CryptPad',
+    //    origin: 'https://cryptpad.example.com',
+    //    maxKeys: 5,
+    //},
+
     /*  Registered users can be forced to protect their account
      *  with a Multi-factor Authentication (MFA) tool like a TOTP
      *  authenticator application.

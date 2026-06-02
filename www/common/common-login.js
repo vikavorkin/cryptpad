@@ -291,7 +291,7 @@ define([
     };
 
     Exports.loginOrRegister = function (config, cb) {
-        let { uname, passwd, token, isRegister, onOTP, ssoAuth } = config;
+        let { uname, passwd, token, isRegister, onOTP, onWebAuthn, ssoAuth } = config;
         if (typeof(cb) !== 'function') { return; }
 
         // Usernames are all lowercase. No going back on this one
@@ -462,6 +462,31 @@ define([
                     });
                 };
                 ask();
+            }).nThen(function (w) {
+                if (missingAuth !== 'WebAuthn') { return; }
+                if (typeof onWebAuthn !== 'function') {
+                    w.abort();
+                    waitFor.abort();
+                    return void cb('WEBAUTHN_NOT_SUPPORTED');
+                }
+                var done = w();
+                var ssoSession = (res.auth_token && res.auth_token.bearer) || '';
+                onWebAuthn(blockKeys, ssoSession, function (err, response) {
+                    if (err) {
+                        console.error(err);
+                        w.abort();
+                        waitFor.abort();
+                        return void cb('WEBAUTHN_FAILED');
+                    }
+                    if (!response || !response.bearer) {
+                        w.abort();
+                        waitFor.abort();
+                        return void cb('WEBAUTHN_FAILED');
+                    }
+                    console.log("WebAuthn: successfully retrieved a bearer token");
+                    res.auth_token = response;
+                    done();
+                });
             }).nThen(function (w) {
                 Util.getBlock(blockUrl, res.auth_token, function (err, response) {
                     if (err) {
