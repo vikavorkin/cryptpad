@@ -294,6 +294,33 @@ define([
         let { uname, passwd, token, isRegister, onOTP, onWebAuthn, ssoAuth } = config;
         if (typeof(cb) !== 'function') { return; }
 
+        // Default WebAuthn handler: trigger WEBAUTHN_VALIDATE using the already-loaded
+        // ServerCommand. The caller can override this with a custom onWebAuthn in config
+        // (e.g. to show custom UI before the browser's native credential dialog appears).
+        if (typeof onWebAuthn !== 'function') {
+            onWebAuthn = function (blockKeys, ssoSession, cb) {
+                require(['/components/simplewebauthn-browser/dist/bundle/index.umd.min.js'],
+                function (SimpleWebAuthn) {
+                    ServerCommand(blockKeys.sign, {
+                        command: 'WEBAUTHN_VALIDATE',
+                        session: ssoSession || '',
+                    }, cb, function (stage1Response, next) {
+                        if (!stage1Response || !stage1Response.authenticationOptions) {
+                            return void next('WEBAUTHN_NO_OPTIONS');
+                        }
+                        SimpleWebAuthn.startAuthentication({
+                            optionsJSON: stage1Response.authenticationOptions,
+                        }).then(function (assertionResponse) {
+                            next(null, { assertionResponse: assertionResponse });
+                        }).catch(function (err) {
+                            console.error(err);
+                            next('WEBAUTHN_CANCELLED');
+                        });
+                    });
+                });
+            };
+        }
+
         // Usernames are all lowercase. No going back on this one
         uname = uname.toLowerCase();
 
