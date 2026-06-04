@@ -130,10 +130,14 @@ function proxy(req, res) {
     const upstream = Http.request(options, (upRes) => {
         const corsHeaders = rewriteCorsHeaders(reqOrigin, upRes.headers);
 
-        // Rewrite /api/config so httpUnsafeOrigin points at the proxy.
-        // Without this the client constructs block/blob URLs like
-        // http://localhost:3000/block/... which the browser fetches directly,
-        // bypassing the proxy and hitting a CORS wall.
+        // Rewrite /api/config so httpUnsafeOrigin and httpSafeOrigin both point
+        // at the proxy.  Without this:
+        //   - httpUnsafeOrigin stays http://localhost:3000 → block/blob URLs bypass
+        //     the proxy and hit a CORS error.
+        //   - httpSafeOrigin stays http://localhost:3001 → sandboxed iframes are
+        //     mixed-content and blocked by the browser when the page is HTTPS.
+        // Setting both to the same proxy origin loses sandbox XSS isolation, but
+        // that's acceptable for a dev testing environment.
         const isConfig = req.url === '/api/config';
         const isCompressed = upRes.headers['content-encoding'];
         if (isConfig && !isCompressed) {
@@ -141,11 +145,12 @@ function proxy(req, res) {
             const chunks = [];
             upRes.on('data', chunk => chunks.push(chunk));
             upRes.on('end', () => {
+                // /api/config is JSON.stringify'd with tab indentation, so values
+                // appear as:  "key": "value"  (space after colon).
                 const original = Buffer.concat(chunks).toString('utf8');
-                const rewritten = original.replace(
-                    /"httpUnsafeOrigin"\s*:\s*"[^"]*"/,
-                    `"httpUnsafeOrigin":"${proxyOrigin}"`
-                );
+                const rewritten = original
+                    .replace(/"httpUnsafeOrigin"\s*:\s*"[^"]*"/, `"httpUnsafeOrigin": "${proxyOrigin}"`)
+                    .replace(/"httpSafeOrigin"\s*:\s*"[^"]*"/,   `"httpSafeOrigin": "${proxyOrigin}"`);
                 const out = Object.assign({}, corsHeaders);
                 delete out['content-length'];
                 out['content-length'] = String(Buffer.byteLength(rewritten));
