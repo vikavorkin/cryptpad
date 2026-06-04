@@ -291,12 +291,14 @@ define([
                                 if (!stage1Response || !stage1Response.registrationOptions) {
                                     return void next('WEBAUTHN_NO_OPTIONS');
                                 }
+                                console.log('[WebAuthn] startRegistration optionsJSON:', JSON.stringify(stage1Response.registrationOptions, null, 2));
                                 SimpleWebAuthn.startRegistration({
                                     optionsJSON: stage1Response.registrationOptions,
                                 }).then(function (attestationResponse) {
                                     next(null, { attestationResponse: attestationResponse });
                                 }).catch(function (err) {
-                                    console.error(err);
+                                    console.error('[WebAuthn] startRegistration error:', err);
+                                    console.error('[WebAuthn] cause:', err.cause);
                                     next('WEBAUTHN_CANCELLED');
                                 });
                             });
