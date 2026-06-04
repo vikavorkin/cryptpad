@@ -163,6 +163,29 @@ const factory = (Util, ApiConfig = {}, ServerCommand, Nacl) => {
         }
     };
 
+    // Returns a stage2Fn for ServerCommand when auth.type is 'WebAuthn'.
+    // Between Stage 1 and Stage 2 the user touches their key; the resulting
+    // assertionResponse is injected into the Stage 2 request body via stage2Extensions.
+    var makeWebAuthnStage2Fn = function () {
+        return function (stage1Response, next) {
+            if (!stage1Response || !stage1Response.authenticationOptions) {
+                return void next('WEBAUTHN_NO_OPTIONS');
+            }
+            var SimpleWebAuthn = window.SimpleWebAuthnBrowser;
+            if (!SimpleWebAuthn || typeof SimpleWebAuthn.startAuthentication !== 'function') {
+                return void next('WEBAUTHN_UNSUPPORTED');
+            }
+            SimpleWebAuthn.startAuthentication({
+                optionsJSON: stage1Response.authenticationOptions,
+            }).then(function (assertionResponse) {
+                next(null, { assertionResponse: assertionResponse });
+            }).catch(function (err) {
+                console.error(err);
+                next('WEBAUTHN_CANCELLED');
+            });
+        };
+    };
+
     Block.checkRights = function (data, _cb) {
         const cb = Util.mkAsync(_cb);
         const { blockKeys, auth } = data;
@@ -170,10 +193,11 @@ const factory = (Util, ApiConfig = {}, ServerCommand, Nacl) => {
         var command = 'MFA_CHECK';
         if (auth && auth.type) { command = `${auth.type.toUpperCase()}_` + command; }
 
+        var isWebAuthn = auth && auth.type === 'WebAuthn';
         ServerCommand(blockKeys.sign, {
             command: command,
             auth: auth && auth.data
-        }, cb);
+        }, cb, isWebAuthn ? makeWebAuthnStage2Fn() : undefined);
     };
     Block.writeLoginBlock = function (data, cb) {
         const { content, blockKeys, oldBlockKeys, auth, pw, session, token, userData } = data;
@@ -188,11 +212,12 @@ const factory = (Util, ApiConfig = {}, ServerCommand, Nacl) => {
         if (token) { block.inviteToken = token; }
         if (userData) { block.userData = userData; }
 
+        var isWebAuthn = auth && auth.type === 'WebAuthn';
         ServerCommand(blockKeys.sign, {
             command: command,
             content: block,
             session: session // sso session
-        }, cb);
+        }, cb, isWebAuthn ? makeWebAuthnStage2Fn() : undefined);
     };
     Block.removeLoginBlock = function (data, cb) {
         const { reason, blockKeys, auth, edPublic } = data;
@@ -200,12 +225,13 @@ const factory = (Util, ApiConfig = {}, ServerCommand, Nacl) => {
         var command = 'REMOVE_BLOCK';
         if (auth && auth.type) { command = `${auth.type.toUpperCase()}_` + command; }
 
+        var isWebAuthn = auth && auth.type === 'WebAuthn';
         ServerCommand(blockKeys.sign, {
             command: command,
             auth: auth && auth.data,
             edPublic: edPublic,
             reason: reason
-        }, cb);
+        }, cb, isWebAuthn ? makeWebAuthnStage2Fn() : undefined);
     };
 
     Block.updateSSOBlock = function (data, cb) {

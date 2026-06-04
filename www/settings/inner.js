@@ -566,6 +566,16 @@ define([
                                 }), function () {
                                     w.abort(); // On exit OTP screen
                                 });
+                            } else if (auth.type === 'WebAuthn') {
+                                // The assertion is obtained between Stage 1 and Stage 2 inside
+                                // login-block.js via the stage2Fn mechanism. Show a prompt so
+                                // the user knows to have their security key ready.
+                                UI.alert(Messages.webauthn_touch_key ||
+                                    'Have your security key ready. You will be asked to touch it to confirm account deletion.',
+                                function () {
+                                    UI.addLoadingScreen({ loadingText: Messages.settings_deleteTitle });
+                                    w()();
+                                }, true);
                             }
                         }));
                     }).nThen(function () {
@@ -725,6 +735,16 @@ define([
                                     }), function () {
                                         w.abort(); // On exit OTP screen
                                     });
+                                } else if (auth.type === 'WebAuthn') {
+                                    // The assertion is obtained between Stage 1 and Stage 2 inside
+                                    // login-block.js via the stage2Fn mechanism. Show a prompt so
+                                    // the user knows to have their security key ready.
+                                    UI.alert(Messages.webauthn_touch_key ||
+                                        'Have your security key ready. You will be asked to touch it to confirm the password change.',
+                                    function () {
+                                        UI.addLoadingScreen({ loadingText: Messages.settings_changePasswordPending });
+                                        w()();
+                                    }, true);
                                 }
                             }));
                         }).nThen(function () {
@@ -890,17 +910,35 @@ define([
         var content = h('div');
         sframeChan.query('Q_SETTINGS_MFA_CHECK', {}, function (err, obj) {
             if (err || !obj || (obj && obj.err === 'NOBLOCK')) { return void cb(false); }
-            var enabled = obj && obj.mfa && obj.type === 'TOTP';
+            var mfaType = (obj && obj.mfa) ? obj.type : null; // 'TOTP', 'WebAuthn', or null
             var config = {
                 accountName: privateData.accountName,
                 origin: privateData.origin
             };
-            var draw = (state) => {
-                common.totpSetup(config, content, state, (newState) => {
-                    draw(newState);
-                });
-            };
-            draw(Boolean(enabled));
+
+            if (mfaType === 'WebAuthn' || (!mfaType && common.webauthnIsSupported())) {
+                // Show the WebAuthn section when WebAuthn is active or the browser supports it
+                // and no other MFA is configured yet.
+                var drawWebAuthn = (state) => {
+                    common.webauthnSetup(config, content, state, (newState) => {
+                        drawWebAuthn(newState);
+                    });
+                };
+                drawWebAuthn(mfaType === 'WebAuthn');
+            }
+
+            if (mfaType === 'TOTP' || !mfaType) {
+                // Show the TOTP section when TOTP is active or no MFA is configured yet.
+                var totpContent = h('div');
+                $(content).append(totpContent);
+                var drawTOTP = (state) => {
+                    common.totpSetup(config, totpContent, state, (newState) => {
+                        drawTOTP(newState);
+                    });
+                };
+                drawTOTP(mfaType === 'TOTP');
+            }
+
             cb(content);
         });
     }, true);

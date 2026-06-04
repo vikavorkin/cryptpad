@@ -20,6 +20,7 @@ define([
     '/common/inner/cache.js',
     '/common/inner/common-mediatag.js',
     '/common/inner/mfa.js',
+    '/common/inner/webauthn.js',
     '/common/metadata-manager.js',
 
     '/customize/application_config.js',
@@ -54,6 +55,7 @@ define([
     Cache,
     MT,
     MFA,
+    WebAuthn,
     MetadataMgr,
     AppConfig,
     Pages,
@@ -143,6 +145,8 @@ define([
     funcs.getMediaTagPreview = callWithCommon(MT.getMediaTagPreview);
     funcs.getMediaTag = callWithCommon(MT.getMediaTag);
     funcs.totpSetup = callWithCommon(MFA.totpSetup);
+    funcs.webauthnSetup = callWithCommon(WebAuthn.setup);
+    funcs.webauthnIsSupported = WebAuthn.isSupported;
 
     // Thumb
     funcs.displayThumbnail = callWithCommon(Thumb.displayThumbnail);
