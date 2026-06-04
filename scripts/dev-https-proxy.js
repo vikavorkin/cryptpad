@@ -154,6 +154,11 @@ function proxy(req, res) {
                 const out = Object.assign({}, corsHeaders);
                 delete out['content-length'];
                 out['content-length'] = String(Buffer.byteLength(rewritten));
+                // RequireJS appends ?ver=X which makes the server send
+                // Cache-Control: max-age=31536000. If the browser caches
+                // the old config (httpUnsafeOrigin=http://localhost:3000),
+                // subsequent requests bypass the proxy and hit a CSP wall.
+                out['cache-control'] = 'no-store';
                 res.writeHead(upRes.statusCode, out);
                 res.end(rewritten);
             });
