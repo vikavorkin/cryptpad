@@ -278,8 +278,7 @@ define([
                         require([
                             '/common/outer/http-command.js',
                             '/components/simplewebauthn-browser/dist/bundle/index.umd.min.js',
-                        ], function (ServerCommand) {
-                            var SimpleWebAuthn = window.SimpleWebAuthnBrowser;
+                        ], function (ServerCommand, SimpleWebAuthn) {
                             ServerCommand(obj.key, {
                                 command: 'WEBAUTHN_SETUP',
                                 session: Utils.LocalStore.getSessionToken(),
@@ -310,8 +309,7 @@ define([
                         require([
                             '/common/outer/http-command.js',
                             '/components/simplewebauthn-browser/dist/bundle/index.umd.min.js',
-                        ], function (ServerCommand) {
-                            var SimpleWebAuthn = window.SimpleWebAuthnBrowser;
+                        ], function (ServerCommand, SimpleWebAuthn) {
                             ServerCommand(obj.key, {
                                 command: 'WEBAUTHN_REVOKE',
                                 credentialId: obj.data && obj.data.credentialId,
@@ -342,8 +340,7 @@ define([
                         require([
                             '/common/outer/http-command.js',
                             '/components/simplewebauthn-browser/dist/bundle/index.umd.min.js',
-                        ], function (ServerCommand) {
-                            var SimpleWebAuthn = window.SimpleWebAuthnBrowser;
+                        ], function (ServerCommand, SimpleWebAuthn) {
                             ServerCommand(obj.key, {
                                 command: 'WEBAUTHN_VALIDATE',
                                 session: obj.session || '',

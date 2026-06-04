@@ -11,8 +11,7 @@ define([
     '/customize.dist/login.js',
     '/common/common-icons.js',
     '/components/simplewebauthn-browser/dist/bundle/index.umd.min.js',
-], function ($, Messages, h, UI, nThen, Login, Icons) {
-    var SimpleWebAuthn = window.SimpleWebAuthnBrowser;
+], function ($, Messages, h, UI, nThen, Login, Icons, SimpleWebAuthn) {
 
     var WebAuthn = {};
 

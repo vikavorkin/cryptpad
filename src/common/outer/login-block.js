@@ -171,17 +171,21 @@ const factory = (Util, ApiConfig = {}, ServerCommand, Nacl) => {
             if (!stage1Response || !stage1Response.authenticationOptions) {
                 return void next('WEBAUTHN_NO_OPTIONS');
             }
-            var SimpleWebAuthn = window.SimpleWebAuthnBrowser;
-            if (!SimpleWebAuthn || typeof SimpleWebAuthn.startAuthentication !== 'function') {
-                return void next('WEBAUTHN_UNSUPPORTED');
-            }
-            SimpleWebAuthn.startAuthentication({
-                optionsJSON: stage1Response.authenticationOptions,
-            }).then(function (assertionResponse) {
-                next(null, { assertionResponse: assertionResponse });
-            }).catch(function (err) {
-                console.error(err);
-                next('WEBAUTHN_CANCELLED');
+            // Lazy-require so we get the AMD export rather than window.SimpleWebAuthnBrowser,
+            // which is only set in the non-AMD (plain <script>) UMD path.
+            require(['/components/simplewebauthn-browser/dist/bundle/index.umd.min.js'],
+            function (SimpleWebAuthn) {
+                if (!SimpleWebAuthn || typeof SimpleWebAuthn.startAuthentication !== 'function') {
+                    return void next('WEBAUTHN_UNSUPPORTED');
+                }
+                SimpleWebAuthn.startAuthentication({
+                    optionsJSON: stage1Response.authenticationOptions,
+                }).then(function (assertionResponse) {
+                    next(null, { assertionResponse: assertionResponse });
+                }).catch(function (err) {
+                    console.error(err);
+                    next('WEBAUTHN_CANCELLED');
+                });
             });
         };
     };
