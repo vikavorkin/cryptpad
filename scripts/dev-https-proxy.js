@@ -128,7 +128,34 @@ function proxy(req, res) {
     };
 
     const upstream = Http.request(options, (upRes) => {
-        res.writeHead(upRes.statusCode, rewriteCorsHeaders(reqOrigin, upRes.headers));
+        const corsHeaders = rewriteCorsHeaders(reqOrigin, upRes.headers);
+
+        // Rewrite /api/config so httpUnsafeOrigin points at the proxy.
+        // Without this the client constructs block/blob URLs like
+        // http://localhost:3000/block/... which the browser fetches directly,
+        // bypassing the proxy and hitting a CORS wall.
+        const isConfig = req.url === '/api/config';
+        const isCompressed = upRes.headers['content-encoding'];
+        if (isConfig && !isCompressed) {
+            const proxyOrigin = `https://${req.headers.host || `localhost:${HTTPS_PORT}`}`;
+            const chunks = [];
+            upRes.on('data', chunk => chunks.push(chunk));
+            upRes.on('end', () => {
+                const original = Buffer.concat(chunks).toString('utf8');
+                const rewritten = original.replace(
+                    /"httpUnsafeOrigin"\s*:\s*"[^"]*"/,
+                    `"httpUnsafeOrigin":"${proxyOrigin}"`
+                );
+                const out = Object.assign({}, corsHeaders);
+                delete out['content-length'];
+                out['content-length'] = String(Buffer.byteLength(rewritten));
+                res.writeHead(upRes.statusCode, out);
+                res.end(rewritten);
+            });
+            return;
+        }
+
+        res.writeHead(upRes.statusCode, corsHeaders);
         upRes.pipe(res, { end: true });
     });
 
