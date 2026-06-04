@@ -115,25 +115,27 @@ function proxy(req, res) {
 
 // WebSocket upgrade passthrough (needed for cryptpad_websocket).
 function proxyUpgrade(req, socket, head) {
-    const wsTarget = HTTP_TARGET.replace(/^https?/, 'ws');
-    const wsUrl = new Url.URL(req.url, wsTarget);
+    // Headers Node.js already provides in lowercase; drop ones we set explicitly.
+    const SKIP = new Set(['host', 'upgrade', 'connection']);
 
     const upstream = require('net').connect({
         host: target.hostname,
         port: parseInt(target.port, 10) || 80,
     }, () => {
+        const extraHeaders = Object.entries(req.headers)
+            .filter(([k]) => !SKIP.has(k))
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('\r\n');
+
         upstream.write(
             `GET ${req.url} HTTP/1.1\r\n` +
             `Host: ${target.hostname}:${target.port}\r\n` +
             `Upgrade: websocket\r\n` +
             `Connection: Upgrade\r\n` +
-            Object.entries(req.headers)
-                .filter(([k]) => !['host'].includes(k))
-                .map(([k, v]) => `${k}: ${v}`)
-                .join('\r\n') +
-            '\r\n\r\n'
+            (extraHeaders ? extraHeaders + '\r\n' : '') +
+            '\r\n'
         );
-        upstream.write(head);
+        if (head && head.length) { upstream.write(head); }
     });
 
     upstream.on('data', (chunk) => { socket.write(chunk); });
@@ -142,8 +144,6 @@ function proxyUpgrade(req, socket, head) {
     socket.on('data', (chunk) => { upstream.write(chunk); });
     socket.on('end', ()  => { upstream.end(); });
     socket.on('error', () => { upstream.end(); });
-
-    void wsUrl; // suppress unused-variable lint warning
 }
 
 // ── Startup ───────────────────────────────────────────────────────────────────
