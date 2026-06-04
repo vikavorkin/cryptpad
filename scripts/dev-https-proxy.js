@@ -82,7 +82,37 @@ function ensureCert() {
 
 const target = new Url.URL(HTTP_TARGET);
 
+// Rewrite CORS response headers so the browser accepts responses when the
+// page is loaded from https://localhost:HTTPS_PORT instead of HTTP_TARGET.
+function rewriteCorsHeaders(reqOrigin, headers) {
+    if (!reqOrigin) { return headers; }
+    const out = Object.assign({}, headers);
+    out['access-control-allow-origin']      = reqOrigin;
+    out['access-control-allow-credentials'] = 'true';
+    // Ensure caches don't serve a response with a different Origin.
+    const vary = out['vary'];
+    out['vary'] = vary ? (vary + ', Origin') : 'Origin';
+    return out;
+}
+
 function proxy(req, res) {
+    const reqOrigin = req.headers['origin'];
+
+    // Handle CORS preflight without forwarding to the upstream.
+    if (req.method === 'OPTIONS' && reqOrigin) {
+        res.writeHead(204, {
+            'access-control-allow-origin':      reqOrigin,
+            'access-control-allow-credentials': 'true',
+            'access-control-allow-methods':
+                req.headers['access-control-request-method'] || 'GET, POST, OPTIONS',
+            'access-control-allow-headers':
+                req.headers['access-control-request-headers'] || 'Content-Type',
+            'access-control-max-age': '86400',
+            'vary': 'Origin',
+        });
+        return res.end();
+    }
+
     const options = {
         hostname: target.hostname,
         port:     target.port || 80,
@@ -98,7 +128,7 @@ function proxy(req, res) {
     };
 
     const upstream = Http.request(options, (upRes) => {
-        res.writeHead(upRes.statusCode, upRes.headers);
+        res.writeHead(upRes.statusCode, rewriteCorsHeaders(reqOrigin, upRes.headers));
         upRes.pipe(res, { end: true });
     });
 
