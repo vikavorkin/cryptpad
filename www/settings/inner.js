@@ -916,19 +916,14 @@ define([
                 origin: privateData.origin
             };
 
-            if (mfaType === 'WebAuthn' || (!mfaType && common.webauthnIsSupported())) {
-                // Show the WebAuthn section when WebAuthn is active or the browser supports it
-                // and no other MFA is configured yet.
+            if (mfaType === 'WebAuthn') {
                 var drawWebAuthn = (state) => {
                     common.webauthnSetup(config, content, state, (newState) => {
                         drawWebAuthn(newState);
                     });
                 };
-                drawWebAuthn(mfaType === 'WebAuthn');
-            }
-
-            if (mfaType === 'TOTP' || !mfaType) {
-                // Show the TOTP section when TOTP is active or no MFA is configured yet.
+                drawWebAuthn(true);
+            } else if (mfaType === 'TOTP') {
                 var totpContent = h('div');
                 $(content).append(totpContent);
                 var drawTOTP = (state) => {
@@ -936,7 +931,65 @@ define([
                         drawTOTP(newState);
                     });
                 };
-                drawTOTP(mfaType === 'TOTP');
+                drawTOTP(true);
+            } else {
+                // No MFA configured yet — show a method picker when both are available
+                var webauthnSupported = common.webauthnIsSupported();
+                var methodContainer = h('div.cp-mfa-method-container');
+                $(content).append(methodContainer);
+
+                var showMethod = function (method) {
+                    $(methodContainer).empty();
+                    var methodContent = h('div');
+                    $(methodContainer).append(methodContent);
+                    if (method === 'webauthn') {
+                        var drawWA = (state) => {
+                            common.webauthnSetup(config, methodContent, state, (newState) => {
+                                drawWA(newState);
+                            });
+                        };
+                        drawWA(false);
+                    } else {
+                        var drawT = (state) => {
+                            common.totpSetup(config, methodContent, state, (newState) => {
+                                drawT(newState);
+                            });
+                        };
+                        drawT(false);
+                    }
+                };
+
+                if (webauthnSupported) {
+                    var waBtn = h('button.btn.btn-primary.cp-mfa-method-btn',
+                        Messages.webauthn_method_label || 'Security Key');
+                    var totpBtn = h('button.btn.cp-mfa-method-btn',
+                        Messages.totp_method_label || 'Authenticator App');
+                    var selector = h('div.cp-mfa-method-selector', [
+                        h('p.cp-settings-mfa-hint',
+                            Messages.mfa_choose_method || 'Choose a two-factor authentication method:'),
+                        h('div.cp-mfa-method-buttons', [waBtn, totpBtn]),
+                    ]);
+                    $(content).prepend(selector);
+
+                    var setActive = function (active, inactive) {
+                        $(active).addClass('btn-primary').removeClass('btn-default');
+                        $(inactive).removeClass('btn-primary').addClass('btn-default');
+                    };
+
+                    $(waBtn).on('click', function () {
+                        setActive(waBtn, totpBtn);
+                        showMethod('webauthn');
+                    });
+                    $(totpBtn).on('click', function () {
+                        setActive(totpBtn, waBtn);
+                        showMethod('totp');
+                    });
+
+                    // Default to WebAuthn
+                    showMethod('webauthn');
+                } else {
+                    showMethod('totp');
+                }
             }
 
             cb(content);
